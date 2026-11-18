@@ -1,0 +1,1689 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Memory Game Ranking | 실시간 타임 랭킹 시스템</title>
+  <!-- Firebase Compat SDK (실시간 다중 기기 동기화용) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <style>
+    :root {
+      --bg-base: #07090e;
+      --bg-surface: rgba(17, 21, 32, 0.78);
+      --bg-surface-hover: rgba(26, 32, 48, 0.9);
+      --bg-input: rgba(10, 13, 20, 0.85);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-accent: rgba(56, 189, 248, 0.35);
+
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.25);
+      --indigo: #818cf8;
+      --gold: #fbbf24;
+      --gold-bg: rgba(251, 191, 36, 0.12);
+      --gold-border: rgba(251, 191, 36, 0.4);
+      --silver: #e2e8f0;
+      --silver-bg: rgba(226, 232, 240, 0.1);
+      --silver-border: rgba(226, 232, 240, 0.35);
+      --bronze: #d97706;
+      --bronze-bg: rgba(217, 119, 6, 0.12);
+      --bronze-border: rgba(217, 119, 6, 0.38);
+
+      --danger: #f43f5e;
+      --danger-bg: rgba(244, 63, 94, 0.14);
+      --success: #10b981;
+
+      --radius-lg: 18px;
+      --radius-md: 12px;
+      --radius-sm: 8px;
+      --shadow-card: 0 20px 50px rgba(0, 0, 0, 0.55);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg-base);
+      background-image:
+        radial-gradient(circle at 15% 10%, rgba(56, 189, 248, 0.12), transparent 38%),
+        radial-gradient(circle at 85% 15%, rgba(251, 191, 36, 0.08), transparent 35%),
+        radial-gradient(circle at 50% 95%, rgba(99, 102, 241, 0.1), transparent 45%);
+      background-attachment: fixed;
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 28px 20px 64px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #38bdf8, #6366f1);
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      font-size: 20px;
+      color: #050811;
+      box-shadow: 0 8px 24px rgba(56, 189, 248, 0.35);
+      flex-shrink: 0;
+    }
+
+    .brand-title h1 {
+      font-size: 1.4rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(to right, #ffffff, #cbd5e1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-title p {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+    }
+
+    .header-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Status Pill */
+    .sync-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 13px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .sync-badge:hover {
+      border-color: var(--border-accent);
+      color: var(--text-primary);
+    }
+
+    .sync-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--gold);
+      box-shadow: 0 0 8px var(--gold);
+    }
+
+    .sync-badge.online .sync-dot {
+      background: var(--success);
+      box-shadow: 0 0 10px var(--success);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.55; transform: scale(1.2); }
+    }
+
+    /* Mode Switcher */
+    .mode-switch {
+      display: inline-flex;
+      background: rgba(10, 13, 20, 0.9);
+      padding: 4px;
+      border-radius: 12px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .mode-btn {
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      padding: 7px 14px;
+      border-radius: 9px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .mode-btn.active {
+      background: rgba(56, 189, 248, 0.16);
+      color: var(--accent);
+      box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.35);
+    }
+
+    /* Admin Panel (Computer 1) */
+    .admin-panel {
+      background: var(--bg-surface);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--border-accent);
+      border-radius: var(--radius-lg);
+      padding: 22px;
+      margin-bottom: 26px;
+      box-shadow: var(--shadow-card);
+      display: none;
+      animation: slideDown 0.28s ease;
+    }
+
+    .admin-panel.visible {
+      display: block;
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .panel-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .panel-title {
+      font-size: 0.98rem;
+      font-weight: 700;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    /* Entry Type Selector (개인 / 팀) */
+    .type-selector-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 14px;
+      border-bottom: 1px dashed var(--border-subtle);
+    }
+
+    .type-selector-label {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--text-secondary);
+    }
+
+    .type-toggle {
+      display: inline-flex;
+      background: var(--bg-input);
+      padding: 4px;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+      gap: 4px;
+    }
+
+    .type-btn {
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      padding: 7px 16px;
+      border-radius: 7px;
+      font-size: 0.84rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .type-btn:hover {
+      color: var(--text-primary);
+    }
+
+    .type-btn.active {
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.22), rgba(99, 102, 241, 0.22));
+      color: #ffffff;
+      box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.45);
+    }
+
+    /* Form Grid */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1.5fr 1.8fr auto;
+      gap: 12px;
+      align-items: end;
+    }
+
+    .form-grid.is-team {
+      grid-template-columns: 1.1fr 1.5fr 1.7fr auto;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field.hidden {
+      display: none;
+    }
+
+    .field label {
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      letter-spacing: 0.02em;
+    }
+
+    .input {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      padding: 11px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 0.94rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    .time-inputs {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1.2fr;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .time-inputs input {
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+      padding: 11px 6px;
+    }
+
+    .time-sep {
+      color: var(--text-muted);
+      font-weight: 700;
+      font-size: 1rem;
+    }
+
+    /* Buttons */
+    .btn {
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 11px 18px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #38bdf8, #0284c7);
+      color: #04101d;
+      box-shadow: 0 6px 20px rgba(56, 189, 248, 0.3);
+    }
+
+    .btn-primary:hover {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+    }
+
+    .btn-ghost {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-subtle);
+      padding: 7px 12px;
+      font-size: 0.78rem;
+    }
+
+    .btn-ghost:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-primary);
+    }
+
+    .btn-danger-ghost {
+      background: var(--danger-bg);
+      color: #fda4af;
+      border: 1px solid rgba(244, 63, 94, 0.25);
+      padding: 7px 12px;
+      font-size: 0.78rem;
+    }
+
+    .btn-danger-ghost:hover {
+      background: rgba(244, 63, 94, 0.25);
+      color: #fff;
+    }
+
+    /* Toolbar */
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .stats-summary {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+
+    .stat-pill {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      padding: 6px 12px;
+      border-radius: 999px;
+    }
+
+    .stat-pill strong {
+      color: var(--text-primary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .search-box {
+      position: relative;
+      width: 250px;
+      max-width: 100%;
+    }
+
+    .search-box input {
+      padding: 8px 12px 8px 34px;
+      font-size: 0.84rem;
+      border-radius: 999px;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      pointer-events: none;
+    }
+
+    /* Leaderboard Card */
+    .board-card {
+      background: var(--bg-surface);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow-card);
+    }
+
+    .board-header {
+      display: grid;
+      grid-template-columns: 74px 82px 1fr 160px auto;
+      padding: 14px 22px;
+      background: rgba(10, 13, 20, 0.65);
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+    }
+
+    .board-header.viewer-only {
+      grid-template-columns: 74px 82px 1fr 170px;
+    }
+
+    .rank-list {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .rank-row {
+      display: grid;
+      grid-template-columns: 74px 82px 1fr 160px auto;
+      align-items: center;
+      padding: 16px 22px;
+      border-bottom: 1px solid var(--border-subtle);
+      transition: background 0.18s ease, transform 0.18s ease;
+    }
+
+    .rank-row.viewer-only {
+      grid-template-columns: 74px 82px 1fr 170px;
+    }
+
+    .rank-row:last-child {
+      border-bottom: none;
+    }
+
+    .rank-row:hover {
+      background: var(--bg-surface-hover);
+    }
+
+    /* Top 3 Styling */
+    .rank-row.top-1 {
+      background: linear-gradient(90deg, var(--gold-bg), transparent 65%);
+    }
+    .rank-row.top-2 {
+      background: linear-gradient(90deg, var(--silver-bg), transparent 65%);
+    }
+    .rank-row.top-3 {
+      background: linear-gradient(90deg, var(--bronze-bg), transparent 65%);
+    }
+
+    .rank-badge {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      font-size: 0.95rem;
+      font-variant-numeric: tabular-nums;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .top-1 .rank-badge {
+      background: var(--gold-bg);
+      color: var(--gold);
+      border-color: var(--gold-border);
+      box-shadow: 0 0 18px rgba(251, 191, 36, 0.22);
+    }
+
+    .top-2 .rank-badge {
+      background: var(--silver-bg);
+      color: var(--silver);
+      border-color: var(--silver-border);
+    }
+
+    .top-3 .rank-badge {
+      background: var(--bronze-bg);
+      color: #f59e0b;
+      border-color: var(--bronze-border);
+    }
+
+    /* Entry Type Pill */
+    .kind-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3px 9px;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      width: fit-content;
+    }
+
+    .kind-badge.individual {
+      background: rgba(148, 163, 184, 0.12);
+      color: #cbd5e1;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+    }
+
+    .kind-badge.team {
+      background: rgba(99, 102, 241, 0.16);
+      color: #a5b4fc;
+      border: 1px solid rgba(129, 140, 248, 0.32);
+    }
+
+    /* Player / Team Display */
+    .player-info {
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 4px 10px;
+      padding-right: 14px;
+    }
+
+    .player-name {
+      font-weight: 700;
+      font-size: 1.04rem;
+      color: var(--text-primary);
+    }
+
+    .team-members-inline {
+      font-size: 0.83rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .new-tag {
+      font-size: 0.65rem;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(56, 189, 248, 0.2);
+      color: var(--accent);
+      letter-spacing: 0.04em;
+      align-self: center;
+    }
+
+    .record-time {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 1.18rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.02em;
+      color: var(--text-primary);
+    }
+
+    .top-1 .record-time {
+      color: var(--gold);
+    }
+
+    .row-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+
+    .empty-state {
+      padding: 64px 20px;
+      text-align: center;
+      color: var(--text-secondary);
+    }
+
+    .empty-state p {
+      font-size: 0.95rem;
+      margin-bottom: 6px;
+    }
+
+    .empty-state span {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+
+    /* Modals */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(3, 5, 10, 0.78);
+      backdrop-filter: blur(8px);
+      display: none;
+      place-items: center;
+      padding: 20px;
+      z-index: 100;
+    }
+
+    .modal-backdrop.open {
+      display: grid;
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .modal {
+      width: 100%;
+      max-width: 460px;
+      background: #111623;
+      border: 1px solid var(--border-accent);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.75);
+    }
+
+    .modal h3 {
+      font-size: 1.1rem;
+      margin-bottom: 8px;
+    }
+
+    .modal p.desc {
+      font-size: 0.84rem;
+      color: var(--text-secondary);
+      margin-bottom: 18px;
+      line-height: 1.55;
+    }
+
+    .modal-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .code-hint {
+      background: #080b12;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      font-size: 0.76rem;
+      color: #93c5fd;
+      font-family: monospace;
+      overflow-x: auto;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #161d2e;
+      border: 1px solid var(--border-accent);
+      color: var(--text-primary);
+      padding: 12px 18px;
+      border-radius: 12px;
+      font-size: 0.86rem;
+      font-weight: 600;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+      transform: translateY(120%);
+      opacity: 0;
+      transition: all 0.25s ease;
+      z-index: 200;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 860px) {
+      .form-grid,
+      .form-grid.is-team {
+        grid-template-columns: 1fr 1fr;
+      }
+      .form-grid .time-field {
+        grid-column: span 2;
+      }
+      .form-grid .submit-btn {
+        grid-column: span 2;
+      }
+    }
+
+    @media (max-width: 680px) {
+      .container {
+        padding: 18px 14px 48px;
+      }
+      .form-grid,
+      .form-grid.is-team {
+        grid-template-columns: 1fr;
+      }
+      .form-grid .time-field,
+      .form-grid .submit-btn {
+        grid-column: span 1;
+      }
+      .board-header {
+        display: none;
+      }
+      .rank-row,
+      .rank-row.viewer-only {
+        grid-template-columns: 44px auto 1fr auto;
+        gap: 8px;
+        padding: 14px 14px;
+      }
+      .record-time {
+        font-size: 1.02rem;
+        text-align: right;
+      }
+      .row-actions {
+        grid-column: 2 / 5;
+        justify-content: flex-end;
+        padding-top: 6px;
+        border-top: 1px dashed rgba(255, 255, 255, 0.06);
+      }
+      .search-box {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <div class="brand-icon">🧠</div>
+        <div class="brand-title">
+          <h1>Memory Game Ranking</h1>
+          <p>실시간 웹 동기화 타임어택 리더보드</p>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <button type="button" id="syncStatusBtn" class="sync-badge" title="클라우드 DB 연결 설정">
+          <span class="sync-dot"></span>
+          <span id="syncStatusText">클라우드 연결 중...</span>
+        </button>
+
+        <div class="mode-switch" role="tablist">
+          <button type="button" class="mode-btn active" id="viewerModeBtn">
+            📺 전광판 (컴퓨터 2)
+          </button>
+          <button type="button" class="mode-btn" id="adminModeBtn">
+            🎛 기록 관리 (컴퓨터 1)
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Computer 1: Admin Input Panel -->
+    <section class="admin-panel" id="adminPanel" aria-label="기록 입력 및 관리 패널">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span>⚡ 신규 시간 기록 등록 (컴퓨터 1 전용)</span>
+        </div>
+        <div class="panel-actions">
+          <button type="button" class="btn btn-ghost" id="sortOrderBtn">기준: 최단 시간순 ↑</button>
+          <button type="button" class="btn btn-ghost" id="changePinBtn">PIN 변경</button>
+          <button type="button" class="btn btn-danger-ghost" id="clearAllBtn">전체 초기화</button>
+        </div>
+      </div>
+
+      <!-- 개인 / 팀 선택 토글 -->
+      <div class="type-selector-bar">
+        <span class="type-selector-label">참가 유형</span>
+        <div class="type-toggle" role="group" aria-label="개인 또는 팀 선택">
+          <button type="button" class="type-btn active" id="typeIndividualBtn" data-type="individual">
+            👤 개인
+          </button>
+          <button type="button" class="type-btn" id="typeTeamBtn" data-type="team">
+            👥 팀
+          </button>
+        </div>
+      </div>
+
+      <form id="recordForm" class="form-grid">
+        <div class="field">
+          <label for="primaryName" id="primaryNameLabel">이름 *</label>
+          <input type="text" id="primaryName" class="input" placeholder="예: 김민수" required maxlength="28" />
+        </div>
+
+        <div class="field hidden" id="teamMembersField">
+          <label for="teamMembers">조원 이름 *</label>
+          <input type="text" id="teamMembers" class="input" placeholder="예: 김민수, 이서연, 박지훈" maxlength="60" />
+        </div>
+
+        <div class="field time-field">
+          <label>시간 기록 (분 : 초 . 밀리초)</label>
+          <div class="time-inputs">
+            <input type="number" id="minInput" class="input" placeholder="00" min="0" max="999" aria-label="분" />
+            <span class="time-sep">:</span>
+            <input type="number" id="secInput" class="input" placeholder="00" min="0" max="59" required aria-label="초" />
+            <span class="time-sep">.</span>
+            <input type="number" id="msInput" class="input" placeholder="000" min="0" max="999" aria-label="밀리초" />
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary submit-btn">+ 기록 등록</button>
+      </form>
+    </section>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="stats-summary">
+        <div class="stat-pill">총 참가 <strong id="totalCount">0</strong>팀/명</div>
+        <div class="stat-pill">현재 1위 <strong id="topRecord">--:--.---</strong></div>
+      </div>
+
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="searchInput" class="input" placeholder="이름, 팀명 또는 조원 검색..." />
+      </div>
+    </div>
+
+    <!-- Leaderboard Table -->
+    <main class="board-card">
+      <div class="board-header viewer-only" id="boardHeader">
+        <div>순위</div>
+        <div>구분</div>
+        <div>참가자 / 팀</div>
+        <div>기록</div>
+        <div id="actionHeader" style="display:none; text-align:right;">관리</div>
+      </div>
+
+      <div class="rank-list" id="rankList">
+        <!-- 동적 렌더링 영역 -->
+      </div>
+    </main>
+  </div>
+
+  <!-- Edit Modal (컴퓨터 1 기록 수정) -->
+  <div class="modal-backdrop" id="editModal">
+    <div class="modal">
+      <h3>기록 수정</h3>
+      <p class="desc">선택한 참가자(또는 팀)의 정보와 시간 기록을 수정하면 모든 화면에 즉시 반영됩니다.</p>
+      <form id="editForm" class="modal-stack">
+        <input type="hidden" id="editId" />
+
+        <div class="field">
+          <label>참가 유형</label>
+          <div class="type-toggle" style="width: fit-content;">
+            <button type="button" class="type-btn active" id="editTypeIndividualBtn">👤 개인</button>
+            <button type="button" class="type-btn" id="editTypeTeamBtn">👥 팀</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="editPrimaryName" id="editPrimaryNameLabel">이름 *</label>
+          <input type="text" id="editPrimaryName" class="input" required maxlength="28" />
+        </div>
+
+        <div class="field hidden" id="editMembersField">
+          <label for="editTeamMembers">조원 이름 *</label>
+          <input type="text" id="editTeamMembers" class="input" placeholder="예: 김민수, 이서연, 박지훈" maxlength="60" />
+        </div>
+
+        <div class="field">
+          <label>시간 기록 (분 : 초 . 밀리초)</label>
+          <div class="time-inputs">
+            <input type="number" id="editMin" class="input" min="0" max="999" />
+            <span class="time-sep">:</span>
+            <input type="number" id="editSec" class="input" min="0" max="59" required />
+            <span class="time-sep">.</span>
+            <input type="number" id="editMs" class="input" min="0" max="999" />
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" onclick="closeModal('editModal')">취소</button>
+          <button type="submit" class="btn btn-primary">수정 저장</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Admin PIN Modal -->
+  <div class="modal-backdrop" id="pinModal">
+    <div class="modal">
+      <h3 id="pinModalTitle">관리자 인증 (컴퓨터 1)</h3>
+      <p class="desc" id="pinModalDesc">기록을 입력·수정·삭제하려면 관리자 PIN 번호를 입력하세요. (초기 기본값: <strong>1234</strong>)</p>
+      <form id="pinForm" class="modal-stack">
+        <div class="field">
+          <label for="pinInput">PIN 번호 (숫자 4자리 이상)</label>
+          <input type="password" id="pinInput" class="input" placeholder="••••" required autocomplete="off" />
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" onclick="closeModal('pinModal')">취소</button>
+          <button type="submit" class="btn btn-primary">확인</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Cloud Sync Setup Modal -->
+  <div class="modal-backdrop" id="cloudModal">
+    <div class="modal">
+      <h3>🌐 실시간 웹 동기화 설정 (Firebase)</h3>
+      <p class="desc">
+        컴퓨터 1과 컴퓨터 2가 인터넷을 통해 실시간으로 랭킹을 공유하도록 연결된 <strong>Firebase Realtime Database</strong> 정보입니다.
+      </p>
+      <form id="cloudForm" class="modal-stack">
+        <div class="field">
+          <label for="fbDbUrl">Firebase Realtime Database URL</label>
+          <input
+            type="url"
+            id="fbDbUrl"
+            class="input"
+            placeholder="https://your-project-default-rtdb.firebaseio.com"
+          />
+        </div>
+        <div class="field">
+          <label for="fbApiKey">Firebase API Key (선택사항 - 공개 규칙 시 생략 가능)</label>
+          <input
+            type="text"
+            id="fbApiKey"
+            class="input"
+            placeholder="AIzaSy..."
+          />
+        </div>
+        <div class="code-hint">
+          ✅ 현재 배포 코드의 <strong>DEFAULT_FIREBASE_CONFIG</strong>에 데이터베이스 주소가 기본 내장되어 있습니다.
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-danger-ghost" id="disconnectCloudBtn">연결 해제</button>
+          <button type="button" class="btn btn-ghost" onclick="closeModal('cloudModal')">닫기</button>
+          <button type="submit" class="btn btn-primary">연결 및 저장</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Confirm Delete Modal -->
+  <div class="modal-backdrop" id="confirmModal">
+    <div class="modal">
+      <h3 id="confirmTitle">기록 삭제</h3>
+      <p class="desc" id="confirmDesc">정말 이 기록을 삭제하시겠습니까?</p>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('confirmModal')">취소</button>
+        <button type="button" class="btn btn-danger-ghost" id="confirmYesBtn">삭제하기</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    /**
+     * ============================================================================
+     * [배포용 기본 Firebase 설정]
+     * 모든 접속 기기(컴퓨터 1, 컴퓨터 2)에서 별도 설정 없이 즉시 실시간으로 랭킹이 공유됩니다.
+     * ============================================================================
+     */
+    const DEFAULT_FIREBASE_CONFIG = {
+      apiKey: "",
+      databaseURL: "https://memory-game-ranking-b3c40-default-rtdb.asia-southeast1.firebasedatabase.app"
+    };
+
+    // 상태 관리
+    const STORAGE_KEYS = {
+      RECORDS: "memory_game_ranking_records_v2",
+      PIN: "apex_ranking_admin_pin_v1",
+      CLOUD: "apex_ranking_cloud_config_v1",
+      SORT: "apex_ranking_sort_asc_v1"
+    };
+
+    let records = [];
+    let currentEntryType = "individual"; // "individual" | "team"
+    let editEntryType = "individual";    // "individual" | "team"
+    let isAdminMode = false;
+    let isPinVerified = false;
+    let pinActionMode = "verify"; // "verify" | "change"
+    let sortAscending = localStorage.getItem(STORAGE_KEYS.SORT) !== "false";
+    let dbRef = null;
+    let isCloudConnected = false;
+    let pendingConfirmAction = null;
+
+    // DOM 요소
+    const rankListEl = document.getElementById("rankList");
+    const adminPanelEl = document.getElementById("adminPanel");
+    const viewerModeBtn = document.getElementById("viewerModeBtn");
+    const adminModeBtn = document.getElementById("adminModeBtn");
+    const boardHeaderEl = document.getElementById("boardHeader");
+    const actionHeaderEl = document.getElementById("actionHeader");
+    const searchInputEl = document.getElementById("searchInput");
+
+    // 초기화
+    document.addEventListener("DOMContentLoaded", () => {
+      updateSortButtonUI();
+      setFormEntryType("individual");
+      initDataSource();
+      bindEvents();
+
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("mode") === "admin") {
+        requestAdminMode();
+      }
+    });
+
+    // URL 중복 프로토콜(https://https://) 자동 정제
+    function sanitizeFirebaseUrl(url) {
+      if (!url) return "";
+      return url.trim().replace(/^(https?:\/\/)+/i, "https://").replace(/\/+$/, "");
+    }
+
+    // 데이터 소스 초기화
+    function initDataSource() {
+      const savedCloud = JSON.parse(localStorage.getItem(STORAGE_KEYS.CLOUD) || "null");
+      const activeConfig = (savedCloud && savedCloud.databaseURL) ? savedCloud : DEFAULT_FIREBASE_CONFIG;
+
+      if (activeConfig && activeConfig.databaseURL) {
+        connectFirebase(activeConfig);
+      } else {
+        loadLocalDemoData();
+      }
+    }
+
+    function connectFirebase(config) {
+      try {
+        if (firebase.apps.length) {
+          firebase.app().delete().then(() => startFirebaseApp(config));
+        } else {
+          startFirebaseApp(config);
+        }
+      } catch (err) {
+        console.error("Firebase 연결 오류:", err);
+        showToast("클라우드 연결에 실패하여 로컬 모드로 전환합니다.");
+        loadLocalDemoData();
+      }
+    }
+
+    function startFirebaseApp(config) {
+      try {
+        const cleanUrl = sanitizeFirebaseUrl(config.databaseURL);
+        const appConfig = { databaseURL: cleanUrl };
+        if (config.apiKey) appConfig.apiKey = config.apiKey.trim();
+
+        firebase.initializeApp(appConfig);
+        const db = firebase.database();
+        dbRef = db.ref("apex_leaderboard/records");
+
+        db.ref(".info/connected").on("value", (snap) => {
+          const connected = snap.val() === true;
+          isCloudConnected = connected;
+          updateSyncStatusUI(connected);
+        });
+
+        dbRef.on(
+          "value",
+          (snapshot) => {
+            const val = snapshot.val();
+            if (!val) {
+              records = [];
+            } else {
+              records = Object.entries(val).map(([id, item]) => ({
+                id,
+                ...item
+              }));
+            }
+            renderBoard();
+          },
+          (error) => {
+            console.error("DB 읽기 오류:", error);
+            showToast("DB 권한 규칙(.read/.write: true)을 확인해주세요.");
+          }
+        );
+      } catch (err) {
+        console.error(err);
+        showToast("올바른 Firebase URL인지 확인해주세요.");
+        loadLocalDemoData();
+      }
+    }
+
+    function loadLocalDemoData() {
+      isCloudConnected = false;
+      dbRef = null;
+      updateSyncStatusUI(false);
+
+      const saved = localStorage.getItem(STORAGE_KEYS.RECORDS);
+      if (saved) {
+        records = JSON.parse(saved);
+      } else {
+        const now = Date.now();
+        records = [
+          { id: "sample_1", entryType: "team", name: "브레인스톰", members: "김민수, 이서연, 박지훈", totalMs: 42350, updatedAt: now - 3600000 },
+          { id: "sample_2", entryType: "individual", name: "강하늘", members: "", totalMs: 45120, updatedAt: now - 1800000 },
+          { id: "sample_3", entryType: "team", name: "메모리킹", members: "최유진, 정우성", totalMs: 48900, updatedAt: now - 600000 }
+        ];
+        saveLocalRecords();
+      }
+      renderBoard();
+    }
+
+    function saveLocalRecords() {
+      localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(records));
+    }
+
+    function updateSyncStatusUI(online) {
+      const badge = document.getElementById("syncStatusBtn");
+      const text = document.getElementById("syncStatusText");
+      if (online) {
+        badge.classList.add("online");
+        text.textContent = "클라우드 실시간 동기화 중";
+      } else {
+        badge.classList.remove("online");
+        text.textContent = "로컬 데모 모드 (클릭해 연결)";
+      }
+    }
+
+    // 개인 / 팀 입력 폼 전환
+    function setFormEntryType(type) {
+      currentEntryType = type;
+      const indBtn = document.getElementById("typeIndividualBtn");
+      const teamBtn = document.getElementById("typeTeamBtn");
+      const formGrid = document.getElementById("recordForm");
+      const nameLabel = document.getElementById("primaryNameLabel");
+      const nameInput = document.getElementById("primaryName");
+      const membersField = document.getElementById("teamMembersField");
+      const membersInput = document.getElementById("teamMembers");
+
+      if (type === "team") {
+        teamBtn.classList.add("active");
+        indBtn.classList.remove("active");
+        formGrid.classList.add("is-team");
+        nameLabel.textContent = "팀 이름 *";
+        nameInput.placeholder = "예: 브레인스톰";
+        membersField.classList.remove("hidden");
+        membersInput.required = true;
+      } else {
+        indBtn.classList.add("active");
+        teamBtn.classList.remove("active");
+        formGrid.classList.remove("is-team");
+        nameLabel.textContent = "이름 *";
+        nameInput.placeholder = "예: 김민수";
+        membersField.classList.add("hidden");
+        membersInput.required = false;
+        membersInput.value = "";
+      }
+    }
+
+    // 수정 모달 개인 / 팀 전환
+    function setEditEntryType(type) {
+      editEntryType = type;
+      const indBtn = document.getElementById("editTypeIndividualBtn");
+      const teamBtn = document.getElementById("editTypeTeamBtn");
+      const nameLabel = document.getElementById("editPrimaryNameLabel");
+      const nameInput = document.getElementById("editPrimaryName");
+      const membersField = document.getElementById("editMembersField");
+      const membersInput = document.getElementById("editTeamMembers");
+
+      if (type === "team") {
+        teamBtn.classList.add("active");
+        indBtn.classList.remove("active");
+        nameLabel.textContent = "팀 이름 *";
+        nameInput.placeholder = "예: 브레인스톰";
+        membersField.classList.remove("hidden");
+        membersInput.required = true;
+      } else {
+        indBtn.classList.add("active");
+        teamBtn.classList.remove("active");
+        nameLabel.textContent = "이름 *";
+        nameInput.placeholder = "예: 김민수";
+        membersField.classList.add("hidden");
+        membersInput.required = false;
+      }
+    }
+
+    // 이벤트 바인딩
+    function bindEvents() {
+      viewerModeBtn.addEventListener("click", () => setAdminMode(false));
+      adminModeBtn.addEventListener("click", requestAdminMode);
+
+      // 등록 폼 개인/팀 토글
+      document.getElementById("typeIndividualBtn").addEventListener("click", () => setFormEntryType("individual"));
+      document.getElementById("typeTeamBtn").addEventListener("click", () => setFormEntryType("team"));
+
+      // 수정 모달 개인/팀 토글
+      document.getElementById("editTypeIndividualBtn").addEventListener("click", () => setEditEntryType("individual"));
+      document.getElementById("editTypeTeamBtn").addEventListener("click", () => setEditEntryType("team"));
+
+      // 신규 기록 등록
+      document.getElementById("recordForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const name = document.getElementById("primaryName").value.trim();
+        const members = currentEntryType === "team"
+          ? document.getElementById("teamMembers").value.trim()
+          : "";
+        const totalMs = parseTimeInputs("minInput", "secInput", "msInput");
+
+        if (!name) {
+          return showToast(currentEntryType === "team" ? "팀 이름을 입력해주세요." : "이름을 입력해주세요.");
+        }
+        if (currentEntryType === "team" && !members) {
+          return showToast("조원 이름을 입력해주세요.");
+        }
+        if (totalMs <= 0) {
+          return showToast("0초보다 큰 시간 기록을 입력해주세요.");
+        }
+
+        const newItem = {
+          entryType: currentEntryType,
+          name,
+          members,
+          totalMs,
+          updatedAt: Date.now()
+        };
+
+        const labelText = currentEntryType === "team" ? `${name} 팀` : `${name}님`;
+
+        if (dbRef) {
+          dbRef.push(newItem)
+            .then(() => showToast(`✅ ${labelText}의 기록이 클라우드에 등록되었습니다.`))
+            .catch(() => showToast("저장 중 오류가 발생했습니다. DB 권한 규칙을 확인하세요."));
+        } else {
+          records.push({ id: "rec_" + Date.now(), ...newItem });
+          saveLocalRecords();
+          renderBoard();
+          showToast(`✅ ${labelText}의 기록이 등록되었습니다.`);
+        }
+
+        const keepType = currentEntryType;
+        e.target.reset();
+        setFormEntryType(keepType);
+        document.getElementById("primaryName").focus();
+      });
+
+      // 기록 수정 저장
+      document.getElementById("editForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const id = document.getElementById("editId").value;
+        const name = document.getElementById("editPrimaryName").value.trim();
+        const members = editEntryType === "team"
+          ? document.getElementById("editTeamMembers").value.trim()
+          : "";
+        const totalMs = parseTimeInputs("editMin", "editSec", "editMs");
+
+        if (!name || totalMs <= 0) {
+          return showToast("올바른 이름과 시간 기록을 입력해주세요.");
+        }
+        if (editEntryType === "team" && !members) {
+          return showToast("조원 이름을 입력해주세요.");
+        }
+
+        const updatedData = {
+          entryType: editEntryType,
+          name,
+          members,
+          totalMs,
+          updatedAt: Date.now()
+        };
+
+        if (dbRef) {
+          dbRef.child(id).update(updatedData)
+            .then(() => showToast("✏️ 기록이 수정되었습니다."))
+            .catch(() => showToast("수정 중 오류가 발생했습니다."));
+        } else {
+          const idx = records.findIndex((r) => r.id === id);
+          if (idx !== -1) {
+            records[idx] = { ...records[idx], ...updatedData };
+            saveLocalRecords();
+            renderBoard();
+            showToast("✏️ 기록이 수정되었습니다.");
+          }
+        }
+        closeModal("editModal");
+      });
+
+      // 정렬 기준 전환
+      document.getElementById("sortOrderBtn").addEventListener("click", () => {
+        sortAscending = !sortAscending;
+        localStorage.setItem(STORAGE_KEYS.SORT, String(sortAscending));
+        updateSortButtonUI();
+        renderBoard();
+      });
+
+      // PIN 모달
+      document.getElementById("changePinBtn").addEventListener("click", () => {
+        pinActionMode = "change";
+        document.getElementById("pinModalTitle").textContent = "새 관리자 PIN 설정";
+        document.getElementById("pinModalDesc").textContent = "컴퓨터 1에서 사용할 새로운 비밀번호(4자리 이상)를 입력하세요.";
+        document.getElementById("pinInput").value = "";
+        openModal("pinModal");
+      });
+
+      document.getElementById("pinForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const entered = document.getElementById("pinInput").value.trim();
+        const currentPin = localStorage.getItem(STORAGE_KEYS.PIN) || "1234";
+
+        if (pinActionMode === "verify") {
+          if (entered === currentPin) {
+            isPinVerified = true;
+            closeModal("pinModal");
+            setAdminMode(true);
+            showToast("🎛 컴퓨터 1 관리자 모드가 활성화되었습니다.");
+          } else {
+            showToast("❌ PIN 번호가 일치하지 않습니다.");
+          }
+        } else {
+          if (entered.length < 4) {
+            return showToast("PIN 번호는 4자리 이상으로 설정해주세요.");
+          }
+          localStorage.setItem(STORAGE_KEYS.PIN, entered);
+          closeModal("pinModal");
+          showToast("🔒 새 PIN 번호가 저장되었습니다.");
+        }
+      });
+
+      // 전체 초기화
+      document.getElementById("clearAllBtn").addEventListener("click", () => {
+        openConfirmModal(
+          "전체 기록 초기화",
+          "등록된 모든 순위 데이터가 영구 삭제됩니다. 계속하시겠습니까?",
+          () => {
+            if (dbRef) {
+              dbRef.remove().then(() => showToast("🗑️ 모든 클라우드 기록이 초기화되었습니다."));
+            } else {
+              records = [];
+              saveLocalRecords();
+              renderBoard();
+              showToast("🗑️ 모든 기록이 초기화되었습니다.");
+            }
+          }
+        );
+      });
+
+      // 클라우드 설정 모달
+      document.getElementById("syncStatusBtn").addEventListener("click", () => {
+        const savedCloud = JSON.parse(localStorage.getItem(STORAGE_KEYS.CLOUD) || "null");
+        document.getElementById("fbDbUrl").value = sanitizeFirebaseUrl(
+          (savedCloud && savedCloud.databaseURL) || DEFAULT_FIREBASE_CONFIG.databaseURL || ""
+        );
+        document.getElementById("fbApiKey").value = (savedCloud && savedCloud.apiKey) || DEFAULT_FIREBASE_CONFIG.apiKey || "";
+        openModal("cloudModal");
+      });
+
+      document.getElementById("cloudForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const databaseURL = sanitizeFirebaseUrl(document.getElementById("fbDbUrl").value);
+        const apiKey = document.getElementById("fbApiKey").value.trim();
+
+        if (!databaseURL) {
+          return showToast("Firebase Database URL을 입력해주세요.");
+        }
+
+        const config = { databaseURL, apiKey };
+        localStorage.setItem(STORAGE_KEYS.CLOUD, JSON.stringify(config));
+        closeModal("cloudModal");
+        connectFirebase(config);
+        showToast("🌐 클라우드 데이터베이스에 연결을 시도합니다.");
+      });
+
+      document.getElementById("disconnectCloudBtn").addEventListener("click", () => {
+        localStorage.removeItem(STORAGE_KEYS.CLOUD);
+        closeModal("cloudModal");
+        loadLocalDemoData();
+        showToast("클라우드 연결이 해제되었습니다.");
+      });
+
+      // 검색 필터
+      searchInputEl.addEventListener("input", renderBoard);
+
+      // 삭제 확인 버튼
+      document.getElementById("confirmYesBtn").addEventListener("click", () => {
+        if (typeof pendingConfirmAction === "function") {
+          pendingConfirmAction();
+        }
+        closeModal("confirmModal");
+      });
+    }
+
+    function requestAdminMode() {
+      if (isPinVerified) {
+        setAdminMode(true);
+        return;
+      }
+      pinActionMode = "verify";
+      document.getElementById("pinModalTitle").textContent = "관리자 인증 (컴퓨터 1)";
+      document.getElementById("pinModalDesc").innerHTML =
+        "기록을 입력·수정·삭제하려면 관리자 PIN 번호를 입력하세요. (초기 기본값: <strong>1234</strong>)";
+      document.getElementById("pinInput").value = "";
+      openModal("pinModal");
+      setTimeout(() => document.getElementById("pinInput").focus(), 100);
+    }
+
+    function setAdminMode(enable) {
+      isAdminMode = enable;
+      if (enable) {
+        adminModeBtn.classList.add("active");
+        viewerModeBtn.classList.remove("active");
+        adminPanelEl.classList.add("visible");
+        boardHeaderEl.classList.remove("viewer-only");
+        actionHeaderEl.style.display = "block";
+      } else {
+        viewerModeBtn.classList.add("active");
+        adminModeBtn.classList.remove("active");
+        adminPanelEl.classList.remove("visible");
+        boardHeaderEl.classList.add("viewer-only");
+        actionHeaderEl.style.display = "none";
+      }
+      renderBoard();
+    }
+
+    function updateSortButtonUI() {
+      const btn = document.getElementById("sortOrderBtn");
+      btn.textContent = sortAscending ? "기준: 최단 시간순 ↑" : "기준: 최장 시간순 ↓";
+    }
+
+    // 시간 파싱 및 포맷팅
+    function parseTimeInputs(minId, secId, msId) {
+      const mins = Math.max(0, parseInt(document.getElementById(minId).value || "0", 10));
+      const secs = Math.max(0, parseInt(document.getElementById(secId).value || "0", 10));
+      const msRaw = (document.getElementById(msId).value || "0").trim();
+      const ms = msRaw.length === 2
+        ? parseInt(msRaw, 10) * 10
+        : Math.min(999, Math.max(0, parseInt(msRaw || "0", 10)));
+
+      return (mins * 60 * 1000) + (secs * 1000) + ms;
+    }
+
+    function formatTime(totalMs) {
+      const mins = Math.floor(totalMs / 60000);
+      const secs = Math.floor((totalMs % 60000) / 1000);
+      const ms = totalMs % 1000;
+
+      const mm = String(mins).padStart(2, "0");
+      const ss = String(secs).padStart(2, "0");
+      const mmm = String(ms).padStart(3, "0");
+      return `${mm}:${ss}.${mmm}`;
+    }
+
+    // 레코드 정규화 (기존 데이터 호환성 유지)
+    function normalizeRecord(item) {
+      const isTeam = item.entryType === "team";
+      const members = isTeam
+        ? (item.members || (item.team && item.team !== "-" ? item.team : ""))
+        : "";
+      return {
+        ...item,
+        isTeam,
+        displayName: item.name || "",
+        displayMembers: members
+      };
+    }
+
+    // 랭킹 보드 렌더링
+    function renderBoard() {
+      const query = searchInputEl.value.trim().toLowerCase();
+
+      const sorted = [...records]
+        .map(normalizeRecord)
+        .sort((a, b) => {
+          if (a.totalMs === b.totalMs) {
+            return (a.updatedAt || 0) - (b.updatedAt || 0);
+          }
+          return sortAscending ? a.totalMs - b.totalMs : b.totalMs - a.totalMs;
+        });
+
+      document.getElementById("totalCount").textContent = sorted.length;
+      document.getElementById("topRecord").textContent = sorted.length > 0
+        ? formatTime(sorted[0].totalMs)
+        : "--:--.---";
+
+      const rankedWithIndex = sorted.map((item, idx) => ({
+        ...item,
+        rank: idx + 1
+      }));
+
+      const filtered = query
+        ? rankedWithIndex.filter(
+            (item) =>
+              item.displayName.toLowerCase().includes(query) ||
+              (item.displayMembers && item.displayMembers.toLowerCase().includes(query))
+          )
+        : rankedWithIndex;
+
+      if (filtered.length === 0) {
+        rankListEl.innerHTML = `
+          <div class="empty-state">
+            <p>${query ? "검색 결과와 일치하는 참가자 또는 팀이 없습니다." : "아직 등록된 시간 기록이 없습니다."}</p>
+            <span>${isAdminMode ? "상단 입력 폼에서 개인 또는 팀 기록을 등록해보세요." : "컴퓨터 1에서 기록을 입력하면 이곳에 실시간으로 표시됩니다."}</span>
+          </div>
+        `;
+        return;
+      }
+
+      const now = Date.now();
+      rankListEl.innerHTML = filtered
+        .map((item) => {
+          const topClass = item.rank <= 3 ? `top-${item.rank}` : "";
+          const rankIcon = item.rank === 1 ? "👑" : item.rank === 2 ? "🥈" : item.rank === 3 ? "🥉" : item.rank;
+          const isRecent = item.updatedAt && now - item.updatedAt < 60000;
+
+          const nameBlockHtml = item.isTeam
+            ? `<span class="player-name">${escapeHtml(item.displayName)}</span>
+               ${item.displayMembers ? `<span class="team-members-inline">${escapeHtml(item.displayMembers)}</span>` : ""}`
+            : `<span class="player-name">${escapeHtml(item.displayName)}</span>`;
+
+          return `
+            <div class="rank-row ${topClass} ${isAdminMode ? "" : "viewer-only"}">
+              <div>
+                <div class="rank-badge">${rankIcon}</div>
+              </div>
+
+              <div>
+                <span class="kind-badge ${item.isTeam ? "team" : "individual"}">
+                  ${item.isTeam ? "팀" : "개인"}
+                </span>
+              </div>
+
+              <div class="player-info">
+                ${nameBlockHtml}
+                ${isRecent ? '<span class="new-tag">NEW</span>' : ""}
+              </div>
+
+              <div class="record-time">${formatTime(item.totalMs)}</div>
+
+              ${
+                isAdminMode
+                  ? `<div class="row-actions">
+                      <button type="button" class="btn btn-ghost" onclick="openEditModal('${item.id}')">수정</button>
+                      <button type="button" class="btn btn-danger-ghost" onclick="deleteRecord('${item.id}', '${escapeAttr(item.displayName)}')">삭제</button>
+                    </div>`
+                  : ""
+              }
+            </div>
+          `;
+        })
+        .join("");
+    }
+
+    // 수정 모달 열기
+    window.openEditModal = function (id) {
+      const raw = records.find((r) => r.id === id);
+      if (!raw) return;
+      const target = normalizeRecord(raw);
+
+      const mins = Math.floor(target.totalMs / 60000);
+      const secs = Math.floor((target.totalMs % 60000) / 1000);
+      const ms = target.totalMs % 1000;
+
+      setEditEntryType(target.isTeam ? "team" : "individual");
+      document.getElementById("editId").value = target.id;
+      document.getElementById("editPrimaryName").value = target.displayName;
+      document.getElementById("editTeamMembers").value = target.displayMembers || "";
+      document.getElementById("editMin").value = mins;
+      document.getElementById("editSec").value = secs;
+      document.getElementById("editMs").value = String(ms).padStart(3, "0");
+
+      openModal("editModal");
+    };
+
+    // 기록 삭제
+    window.deleteRecord = function (id, name) {
+      openConfirmModal(
+        "기록 삭제 확인",
+        `'${name}' 기록을 삭제하시겠습니까?`,
+        () => {
+          if (dbRef) {
+            dbRef.child(id).remove()
+              .then(() => showToast(`🗑️ '${name}' 기록이 삭제되었습니다.`))
+              .catch(() => showToast("삭제 중 오류가 발생했습니다."));
+          } else {
+            records = records.filter((r) => r.id !== id);
+            saveLocalRecords();
+            renderBoard();
+            showToast(`🗑️ '${name}' 기록이 삭제되었습니다.`);
+          }
+        }
+      );
+    };
+
+    // 모달 제어
+    function openModal(id) {
+      document.getElementById(id).classList.add("open");
+    }
+
+    window.closeModal = function (id) {
+      document.getElementById(id).classList.remove("open");
+    };
+
+    function openConfirmModal(title, desc, onConfirm) {
+      document.getElementById("confirmTitle").textContent = title;
+      document.getElementById("confirmDesc").textContent = desc;
+      pendingConfirmAction = onConfirm;
+      openModal("confirmModal");
+    }
+
+    // 토스트 알림
+    let toastTimer = null;
+    function showToast(msg) {
+      const toast = document.getElementById("toast");
+      toast.textContent = msg;
+      toast.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove("show"), 3000);
+    }
+
+    // 보안 이스케이프
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function escapeAttr(str) {
+      return String(str).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+    }
+  </script>
+</body>
+</html>
